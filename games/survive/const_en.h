@@ -1,0 +1,26 @@
+const char * GAMETITLE = "DIGITAL MARS C 16BIT GAME EXAMPLE";
+const char * MENU_START = "1 - START GAME";
+const char * MENU_SOUND = "2 - SOUND: ";
+const char * MENU_HELP = "3 - HELP";
+const char * MENU_EXIT = "0 - EXIT";
+const char * TEXT_ON = "ON";
+const char * TEXT_OFF = "OFF";
+const char * TEXT_AUTHOR = "ALEKSANDR V. TERESHENKOV";
+const char * HELP0 = "  GAME TASK - AVOID OF BUGS";
+const char * HELP1 = "AND GAIN MAX SCORES.";
+const char * HELP2 = "  HOLD ARROW KEY FOR MOVING";
+const char * HELP3 = "AND COLLECT BLUE BONUSES.";
+const char * HELP4 = "* - INC SCORE";
+const char * HELP5 = "+ - INC SPEED";
+const char * HELP6 = "% - PROTECTION";
+const char * HELP7 = "PRESS ENTER TO MAIN MENU";
+const char * BONUS_SPEEDUP = "SPEEDUP:";
+const char * BONUS_SHIELD = "PROTECTION:";
+const char * BONUS_SCORE = "SCORE:";
+const char * TEXT_GAMEOVER = "GAMEOVER, PRESS ENTER";
+
+const int POS_TEXT_SOUND_ON_OFF = 21 ;
+const int POS_TEXT_BONUS_SHIELD = 13 ;
+const int POS_TEXT_BONUS_SCORE = 28 ;
+const int SPEEDUP_POS_X = 9 ;
+const int SHIELD_POS_X = 24 ;
