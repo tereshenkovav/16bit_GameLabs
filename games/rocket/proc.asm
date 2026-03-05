@@ -22,7 +22,7 @@ sloop:
     div cx
     add dl,'0'
     mov [di],dl
-    dec edi
+    dec di
 
     cmp ax,0
     jne sloop
@@ -430,20 +430,25 @@ Randomize:
 
 genRndByAL:
   push ax
+  push cx
 
   mov ax,[rndseed]
-  shl ax,7
+  mov cl,7
+  shl ax,cl
   xor ax,[rndseed]
   mov [rndseed],ax
 
-  shr ax,9
+  mov cl,9
+  shr ax,cl
   xor ax,[rndseed]
   mov [rndseed],ax
 
-  shl ax,8
+  mov cl,8
+  shl ax,cl
   xor ax,[rndseed]
   mov [rndseed],ax
 
+  pop cx
  ; Здесь делим не ax, а только младший байт его, иначе переполнимся
   mov ah,0
 
