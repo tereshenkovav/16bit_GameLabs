@@ -39,7 +39,7 @@ purposes.
 
 ### bomber
 
-Пробный проект на ASIC BASIC.
+Пробный проект на ASIC BASIC и на PowerBasic.
 
 ![16bit_GameLabs](screen_basic.png)
 
@@ -53,6 +53,10 @@ purposes.
 * build.bat - скрипт сборки исходника на Бейсике, запускается вторым
 
 Перед сборкой нужно скопировать файл `ASI5LIB.LIB` в каталог `C:\ASIC`
+
+В каталоге `bomber\pbversion` находится та же игра, но написанная для компилятора
+PowerBasic 3.5 для DOS, сборка из командной строки не поддерживается, нужно открыть
+файл `game.bas` в IDE PowerBasic и выполнить сборку.
 
 ### rocket
 
@@ -71,7 +75,7 @@ DOS/FreeDOS, так и в режиме кросскомпиляции.
 * proc.asm - файл с процедурами
 * build.bat - скрипт сборки
 
-# survive
+### survive
 
 Пробный проект на C и кросс-компилятором DigitalMarsCompiler(DMC). 
 
