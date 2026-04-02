@@ -1,8 +1,8 @@
-const int SCREENWIDTH=320 ;
-const int SCREENHEIGHT=200 ;
-const int SCREENSIZEWORD=32000 ;
+#define SCREENWIDTH 320
+#define SCREENHEIGHT 200
+#define SCREENSIZEWORD 32000
 
-const unsigned int SegA000 = 0xA000 ;
+#define SegA000 0xA000
 
 void setScreen(char num) {
   asm {
