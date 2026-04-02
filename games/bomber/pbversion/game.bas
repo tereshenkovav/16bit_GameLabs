@@ -1,9 +1,19 @@
 $DIM ARRAY
+$CPU 80286
+$FLOAT EMULATE
+$OPTIMIZE SPEED
 DEFINT A-Z
 
 TYPE PointXY
   x AS INTEGER
   y AS INTEGER
+END TYPE
+
+TYPE Rect
+  rleft AS INTEGER
+  rtop AS INTEGER
+  rright AS INTEGER
+  rbottom AS INTEGER
 END TYPE
 
 TYPE GameObject
@@ -15,11 +25,28 @@ TYPE GameObject
   friend AS INTEGER
 END TYPE
 
+DECLARE SUB MainMenu()
+DECLARE SUB SwitchPage()
+DECLARE SUB DrawWhiteRect(re AS Rect)
+DECLARE SUB AddFire()
+DECLARE SUB AddBomb()
+DECLARE SUB AddSuper()
+DECLARE SUB AddEnemyTank()
+DECLARE SUB AddEnemyBomb()
+DECLARE SUB AddEnemyPlane()
+DECLARE SUB AddPlaneFire(idx AS INTEGER)
+DECLARE SUB AddTankFire(idx AS INTEGER)
+DECLARE SUB CalcRectForEnemy(idx AS INTEGER, re AS Rect)
+DECLARE SUB CalcRectForFire(idx AS INTEGER, re AS Rect)
+DECLARE SUB CalcRectForPlayer(re AS Rect)
+DECLARE FUNCTION IsXYInRect(x AS INTEGER, y AS INTEGER, re AS Rect) AS INTEGER
+DECLARE FUNCTION IsRectsIntersect(r1 AS Rect, r2 AS Rect) AS INTEGER
+
 DIM mountain(20) AS PointXY
-DIM superv(7) AS PointXY
-DIM enemybombr(4) AS PointXY
-DIM fire(50) AS GameObject
-DIM enemy(50) AS GameObject
+DIM superv(7) AS SHARED PointXY
+DIM enemybombr(4) AS SHARED PointXY
+DIM fire(50) AS SHARED GameObject
+DIM enemy(50) AS SHARED GameObject
 
 REM Позиции гор
 DATA 0, 190, 70, 170, 70, 170, 130, 190, 310, 190, 350, 140, 350, 140, 400
@@ -29,14 +56,23 @@ REM Направления супервыстрела
 DATA -6,0,-4,2,-2,4,0,6,2,4,4,2,6,0
 REM Векторы лучей бомб
 DATA -3,-3,-3,3,3,3,3,-3
-mountainsize = 20
-firecount = 50
-supercount = 7
-enemycount = 50
-enemybombrcount = 4
 
-global_fired_idx = 0
-global_idx = 0
+SHARED firecount,enemycount,supercount,superv
+SHARED playerx,playery,playervx,playervy,playerw,playerw2,playerh,playerh2
+SHARED laserwait,laserdelay,bombwait,bombdelay,superwait,superdelay
+SHARED ftlaser,ftbomb,ftsuper,etplane,ettank,etbomb
+SHARED enemybombd,enemybombr,bomd,bombr,laserw,superd,superr
+
+DIM re AS Rect
+DIM rf AS Rect
+DIM rp AS Rect
+
+mountainsize = UBOUND(mountain)
+firecount = UBOUND(fire)
+supercount = UBOUND(superv)
+enemycount = UBOUND(enemy)
+enemybombrcount = UBOUND(enemybombr)
+
 REM Отладочный вывод хитбоксов
 showhitzones = 0
 
@@ -48,60 +84,38 @@ REM Установка экрана и экранных страниц отоб�
 SCREEN 7
 
 WorkEntry:
-GOSUB MainMenu:
+
+MainMenu
 
 REM Начальные установки
-playerx = 100
-playery = 100
-playerw = 20
-playerw2 = 10
-playerh = 10
-playerh2 = 5
-playervx = 0
-playervy = 0
+playerx = 100: playery = 100
+playerw = 20: playerw2 = 10
+playerh = 10: playerh2 = 5
+playervx = 0: playervy = 0
 playerbasev = 2
-stopx1 = 10
-stopx2 = 290
-stopy1 = 10
-stopy2 = 160
-laserw = 10
-bombr = 3
-bombd = 6
-superr = 1
-superd = 3
-laserwait = 0
-laserdelay = 10
-bombwait = 0
-bombdelay = 30
-superwait = 0
-superdelay = 100
-ftlaser = 1
-ftbomb = 2
-ftsuper = 3
-ettank = 1
-etbomb = 2
-etplane = 3
-enemybombr = 5
-enemybombd = 10
-enemywait = 20
-enemymindelay = 30
-enemyvardelay = 30
-killtimer = 0
-score = 0
+stopx1 = 10: stopx2 = 290: stopy1 = 10: stopy2 = 160
+laserw = 10: bombr = 3: bombd = 6: superr = 1: superd = 3
+laserwait = 0: laserdelay = 10
+bombwait = 0: bombdelay = 30
+superwait = 0: superdelay = 100
+ftlaser = 1: ftbomb = 2: ftsuper = 3
+ettank = 1: etbomb = 2: etplane = 3
+enemybombr = 5: enemybombd = 10
+enemywait = 20: enemymindelay = 30: enemyvardelay = 30
+killtimer = 0: score = 0
+
 FOR i = 0 to firecount-1: fire(i).typ=0: NEXT i
 FOR i = 0 to enemycount-1: enemy(i).typ=0: NEXT i
 
 RANDOMIZE TIMER
 
-DIM t AS SINGLE
-DIM t1 AS SINGLE
+DIM t AS SINGLE,t1 AS SINGLE
 REM Главный цикл
-GameCicle:
-t = TIMER
-t1 = t
+WHILE 1
+
+t = TIMER: t1 = t
 
 CLS
-
 LINE (0,191)-(319,191),2
 
 REM Вывод гор
@@ -117,12 +131,9 @@ NEXT i
 REM Вывод корабля
 
 IF killtimer=0 THEN
-px2 = playerx+playerw
-py2 = playery+playerh2
-py3 = py2+playerh2
-LINE (playerx,playery)-(px2,py2),10
-LINE (px2,py2)-(playerx,py3),10
-LINE (playerx,py3)-(playerx,playery),10
+  LINE (playerx,playery)-(playerx+playerw,playery+playerh2),10
+  LINE (playerx+playerw,playery+playerh2)-(playerx,playery+playerh),10
+  LINE (playerx,playery+playerh)-(playerx,playery),10
 END IF
 
 REM Вывод выстрелов
@@ -167,29 +178,15 @@ NEXT i
 IF showhitzones=1 THEN
 FOR i = 0 to enemycount-1
   IF enemy(i).typ<>0 THEN
-  global_idx = i
-  GOSUB CalcGlobalRectForEnemy:
-  LINE (global_left,global_top)-(global_right,global_top),15
-  LINE (global_right,global_top)-(global_right,global_bottom),15
-  LINE (global_right,global_bottom)-(global_left,global_bottom),15
-  LINE (global_left,global_bottom)-(global_left,global_top),15
+    CALL CalcRectForEnemy(i,re): CALL DrawWhiteRect(re)
   END IF
 NEXT i
 FOR i = 0 to firecount-1
   IF fire(i).typ<>0 THEN
-  global_idx = i
-  GOSUB CalcGlobalRectForFire:
-  LINE (global_left,global_top)-(global_right,global_top),15
-  LINE (global_right,global_top)-(global_right,global_bottom),15
-  LINE (global_right,global_bottom)-(global_left,global_bottom),15
-  LINE (global_left,global_bottom)-(global_left,global_top),15
+    CALL CalcRectForFire(i,rf): CALL DrawWhiteRect(rf)
   END IF
 NEXT i
-GOSUB CalcGlobalRectForPlayer:
-LINE (global_left,global_top)-(global_right,global_top),15
-LINE (global_right,global_top)-(global_right,global_bottom),15
-LINE (global_right,global_bottom)-(global_left,global_bottom),15
-LINE (global_left,global_bottom)-(global_left,global_top),15
+CALL CalcRectForPlayer(rp): CALL DrawWhiteRect(rp)
 END IF
 
 REM Информация о готовности
@@ -200,92 +197,72 @@ LOCATE 1,18: PRINT "Super:"
 LOCATE 1,27: PRINT "SCORE:"
 
 COLOR 10,0
-IF laserwait=0 THEN LOCATE 1,7: PRINT "OK": END IF
-IF bombwait=0 THEN LOCATE 1,15: PRINT "OK": END IF
-IF superwait=0 THEN LOCATE 1,24: PRINT "OK": END IF
+IF laserwait=0 THEN
+  LOCATE 1,7: PRINT "OK"
+END IF
+IF bombwait=0 THEN
+  LOCATE 1,15: PRINT "OK"
+END IF
+IF superwait=0 THEN
+  LOCATE 1,24: PRINT "OK"
+END IF
 
-s$=STR$(score)
-s$=LTRIM$(s$)
-LOCATE 1,33: PRINT s$
+LOCATE 1,33: PRINT LTRIM$(STR$(score))
 
 REM Переключение страницы
-SCREEN ,,1-scr1,scr1
-scr1=1-scr1
+SwitchPage
 
 REM Управление клавиатурой
 k$ = INKEY$
-   IF k$=CHR$(0)+CHR$(72) THEN
-     playervy=-playerbasev
-     playervx=0
-   END IF
-   IF k$=CHR$(0)+CHR$(80) THEN
-     playervy=playerbasev
-     playervx=0
-   END IF
-   IF k$=CHR$(0)+CHR$(75) THEN
-     playervx=-playerbasev
-     playervy=0
-   END IF
-   IF k$=CHR$(0)+CHR$(77) THEN
-     playervx=playerbasev
-     playervy=0
-   END IF
-   IF k$=CHR$(27) THEN WorkEntry:
-   IF k$=CHR$(32) THEN
-     playervx=0
-     playervy=0
-   END IF
-   IF killtimer=0 THEN
-   IF k$=CHR$(90) THEN GOSUB AddFire:
-   IF k$=CHR$(122) THEN GOSUB AddFire:
-   IF k$=CHR$(88) THEN GOSUB AddBomb:
-   IF k$=CHR$(120) THEN GOSUB AddBomb:
-   IF k$=CHR$(67) THEN GOSUB AddSuper:
-   IF k$=CHR$(99) THEN GOSUB AddSuper:
-   END IF
+IF k$=CHR$(0)+CHR$(72) THEN
+  playervy=-playerbasev: playervx=0
+END IF
+IF k$=CHR$(0)+CHR$(80) THEN
+  playervy=playerbasev: playervx=0
+END IF
+IF k$=CHR$(0)+CHR$(75) THEN
+  playervx=-playerbasev: playervy=0
+END IF
+IF k$=CHR$(0)+CHR$(77) THEN
+  playervx=playerbasev: playervy=0
+END IF
+IF k$=CHR$(27) THEN WorkEntry:
+IF k$=CHR$(32) THEN
+  playervx=0: playervy=0
+END IF
+IF killtimer=0 THEN
+  IF (k$=CHR$(90))OR(k$=CHR$(122)) THEN AddFire
+  IF (k$=CHR$(88))OR(k$=CHR$(120)) THEN AddBomb
+  IF (k$=CHR$(67))OR(k$=CHR$(99)) THEN AddSuper
+END IF
 
 REM Обновление игры
 
 REM Обновление игрока
-INCR playerx,playervx
-INCR playery,playervy
+INCR playerx,playervx: INCR playery,playervy
 
 IF playerx<=stopx1 THEN
-  playerx = stopx1
-  playervx = 0
+  playerx = stopx1:  playervx = 0
 END IF
 
 IF playerx>=stopx2 THEN
-  playerx = stopx2
-  playervx = 0
+  playerx = stopx2: playervx = 0
 END IF
 
 IF playery<=stopy1 THEN
-  playery = stopy1
-  playervy = 0
+  playery = stopy1: playervy = 0
 END IF
 
 IF playery>=stopy2 THEN
-  playery = stopy2
-  playervy = 0
+  playery = stopy2: playervy = 0
 END IF
 
-GOSUB CalcGlobalRectForPlayer:
-global_r1x1 = global_left
-global_r1y1 = global_top
-global_r1x2 = global_right
-global_r1y2 = global_bottom
+CALL CalcRectForPlayer(rp)
 REM Удар игрока о врагов
 FOR i = 0 to enemycount-1
   IF enemy(i).typ<>0 THEN
-    global_idx = i
-    GOSUB CalcGlobalRectForEnemy:
-    global_r2x1 = global_left
-    global_r2y1 = global_top
-    global_r2x2 = global_right
-    global_r2y2 = global_bottom
-    GOSUB CalcIsGlobalRect1Rect2Intersect:
-    IF global_result=1 THEN
+    CALL CalcRectForEnemy(i,re)
+    IF IsRectsIntersect(rp,re) THEN
       enemy(i).typ=0
       if killtimer=0 THEN killtimer=36
     END IF
@@ -295,17 +272,11 @@ REM Удар игрока о снаряды
 FOR i = 0 to firecount-1
   IF fire(i).typ<>0 THEN
     IF fire(i).friend=0 THEN
-    global_idx = i
-    GOSUB CalcGlobalRectForFire:
-    global_r2x1 = global_left
-    global_r2y1 = global_top
-    global_r2x2 = global_right
-    global_r2y2 = global_bottom
-    GOSUB CalcIsGlobalRect1Rect2Intersect:
-    IF global_result=1 THEN
-      fire(i).typ=0
-      if killtimer=0 THEN killtimer=36
-    END IF
+      CALL CalcRectForFire(i,rf)
+      IF IsRectsIntersect(rp,rf) THEN
+        fire(i).typ=0
+        if killtimer=0 THEN killtimer=36
+      END IF
     END IF
   END IF
 NEXT i
@@ -313,23 +284,11 @@ NEXT i
 REM Удар врагов о снаряды
 FOR i = 0 to enemycount-1
   IF enemy(i).typ<>0 THEN
-    global_idx = i
-    GOSUB CalcGlobalRectForEnemy:
-    global_r1x1 = global_left
-    global_r1y1 = global_top
-    global_r1x2 = global_right
-    global_r1y2 = global_bottom
-
+    CALL CalcRectForEnemy(i,re)
     FOR j = 0 to firecount-1
       IF (fire(j).typ<>0)AND(fire(j).friend=1) THEN
-        global_idx = j
-        GOSUB CalcGlobalRectForFire:
-        global_r2x1 = global_left
-        global_r2y1 = global_top
-        global_r2x2 = global_right
-        global_r2y2 = global_bottom
-        GOSUB CalcIsGlobalRect1Rect2Intersect:
-        IF global_result=1 THEN
+        CALL CalcRectForFire(j,rf)
+        IF IsRectsIntersect(re,rf) THEN
           IF enemy(i).typ=ettank THEN INCR score,400
           IF enemy(i).typ=etplane THEN INCR score,200
           IF enemy(i).typ=etbomb THEN INCR score,100
@@ -364,10 +323,7 @@ FOR i = 0 to enemycount-1
   END IF
   IF enemy(i).typ=etplane THEN
     IF (enemy(i).y>=stopy2)OR(enemy(i).y<=stopy1) THEN enemy(i).vy=-enemy(i).vy
-    if enemy(i).y MOD 40 < 2 THEN
-      global_fired_idx = i
-      GOSUB AddPlaneFire:
-    END IF
+    if enemy(i).y MOD 40 < 2 THEN AddPlaneFire(i)
   END IF
   IF enemy(i).typ=etbomb THEN
     enemy(i).vy=0
@@ -375,10 +331,7 @@ FOR i = 0 to enemycount-1
     IF enemy(i).y>playery THEN enemy(i).vy=-1
   END IF
   IF enemy(i).typ=ettank THEN
-    if enemy(i).x MOD 100 = 0 THEN
-      global_fired_idx = i
-      GOSUB AddTankFire:
-    END IF
+    if enemy(i).x MOD 100 = 0 THEN AddTankFire(i)
   END IF
 NEXT i
 
@@ -388,9 +341,9 @@ IF enemywait = 0 THEN
   enemywait = enemymindelay + CINT(RND(1)*enemyvardelay)
 
   tekrnd = CINT(RND(1)*2)
-  if tekrnd = 0 THEN GOSUB AddEnemyTank:
-  if tekrnd = 1 THEN GOSUB AddEnemyPlane:
-  IF tekrnd = 2 THEN GOSUB AddEnemyBomb:
+  if tekrnd = 0 THEN AddEnemyTank
+  if tekrnd = 1 THEN AddEnemyPlane
+  IF tekrnd = 2 THEN AddEnemyBomb
 END IF
 
 REM Прокрутка гор
@@ -407,9 +360,11 @@ END IF
 REM Ожидание кадра
 WHILE t1=t: t1=TIMER: WEND
 
-GOTO GameCicle:
+WEND
 
-MainMenu:
+REM Раздел процедур и функций
+
+SUB MainMenu()
 CLS
 
 COLOR 15,0
@@ -427,20 +382,20 @@ LOCATE 15,5: PRINT "Press Space to start game"
 LOCATE 16,7: PRINT "or Escape to exit"
 
 REM Переключение страницы
-SCREEN ,,1-scr1,scr1
-scr1=1-scr1
+SwitchPage
 
-MenuKeyWait:
-k$ = INKEY$
-IF k$=CHR$(32) THEN RETURN
-IF k$=CHR$(27) THEN
-  SCREEN 0
-  END
-END IF
-GOTO MenuKeyWait:
+WHILE 1
+  k$ = INKEY$
+  IF k$=CHR$(32) THEN EXIT SUB
+  IF k$=CHR$(27) THEN
+    SCREEN 0
+    END
+  END IF
+WEND
+END SUB
 
-AddFire:
-IF laserwait=0 THEN
+SUB AddFire()
+  IF laserwait>0 THEN EXIT SUB
   FOR i = 0 to firecount-1
     IF fire(i).typ=0 THEN
        fire(i).typ=ftlaser
@@ -450,14 +405,13 @@ IF laserwait=0 THEN
        fire(i).vy=0
        fire(i).friend=1
        laserwait=laserdelay
-       RETURN
+       EXIT SUB
     END IF
   NEXT i
-END IF
-RETURN
+END SUB
 
-AddBomb:
-IF bombwait=0 THEN
+SUB AddBomb()
+  IF bombwait>0 THEN EXIT SUB
   FOR i = 0 to firecount-1
     IF fire(i).typ=0 THEN
        fire(i).typ=ftbomb
@@ -467,14 +421,13 @@ IF bombwait=0 THEN
        fire(i).vy=4
        fire(i).friend=1
        bombwait=bombdelay
-       RETURN
+       EXIT SUB
     END IF
   NEXT i
-END IF
-RETURN
+END SUB
 
-AddSuper:
-IF superwait=0 THEN
+SUB AddSuper()
+  IF superwait>0 THEN EXIT SUB
   superwait=superdelay
   j = 0
   FOR i = 0 to firecount-1
@@ -485,14 +438,13 @@ IF superwait=0 THEN
        fire(i).vx=superv(j).x+playervx
        fire(i).vy=superv(j).y+playervy
        fire(i).friend=1
-       IF j=supercount-1 THEN RETURN
+       IF j=supercount-1 THEN EXIT SUB
        INCR j
     END IF
   NEXT i
-END IF
-RETURN
+END SUB
 
-AddEnemyTank:
+SUB AddEnemyTank()
 FOR i = 0 to enemycount-1
   IF enemy(i).typ=0 THEN
      enemy(i).typ=ettank
@@ -500,12 +452,12 @@ FOR i = 0 to enemycount-1
      enemy(i).y=183
      enemy(i).vx=-2
      enemy(i).vy=0
-     RETURN
+     EXIT SUB
   END IF
 NEXT i
-RETURN
+END SUB
 
-AddEnemyBomb:
+SUB AddEnemyBomb()
 FOR i = 0 to enemycount-1
   IF enemy(i).typ=0 THEN
      enemy(i).typ=etbomb
@@ -513,12 +465,12 @@ FOR i = 0 to enemycount-1
      enemy(i).y=20 + CINT(RND(1)*130)
      enemy(i).vx=-3
      enemy(i).vy=0
-     RETURN
+     EXIT SUB
   END IF
 NEXT i
-RETURN
+END SUB
 
-AddEnemyPlane:
+SUB AddEnemyPlane()
 FOR i = 0 to enemycount-1
   IF enemy(i).typ=0 THEN
      enemy(i).typ=etplane
@@ -526,140 +478,115 @@ FOR i = 0 to enemycount-1
      enemy(i).y=30 + CINT(RND(1)*110)
      enemy(i).vy=-2
      enemy(i).vx=0
-     RETURN
+     EXIT SUB
   END IF
 NEXT i
-RETURN
+END SUB
 
-AddPlaneFire:
+SUB AddPlaneFire(idx AS INTEGER)
 FOR i = 0 to firecount-1
   IF fire(i).typ=0 THEN
      fire(i).typ=ftlaser
-     fire(i).x=enemy(global_fired_idx).x-playerw
-     fire(i).y=enemy(global_fired_idx).y+playerh2
+     fire(i).x=enemy(idx).x-playerw
+     fire(i).y=enemy(idx).y+playerh2
      fire(i).vx=-8
      fire(i).vy=0
      fire(i).friend=0
-     RETURN
+     EXIT SUB
   END IF
 NEXT i
-RETURN
+END SUB
 
-AddTankFire:
+SUB AddTankFire(idx AS INTEGER)
 FOR i = 0 to firecount-1
   IF fire(i).typ=0 THEN
      fire(i).typ=ftsuper
-     fire(i).x=enemy(global_fired_idx).x
-     fire(i).y=enemy(global_fired_idx).y-10
+     fire(i).x=enemy(idx).x
+     fire(i).y=enemy(idx).y-10
      fire(i).vx=-4
      fire(i).vy=-2
      fire(i).friend=0
-     RETURN
+     EXIT SUB
   END IF
 NEXT i
-RETURN
+END SUB
 
-CalcGlobalRectForEnemy:
-  global_left = enemy(global_idx).x
-  global_top = enemy(global_idx).y
-  IF enemy(global_idx).typ=etbomb THEN
-    DECR global_left,enemybombd
-    DECR global_top,enemybombd
-    global_right = enemy(global_idx).x
-    global_bottom = enemy(global_idx).y
+SUB CalcRectForEnemy(idx AS INTEGER, re AS Rect)
+  re.rleft = enemy(idx).x
+  re.rtop = enemy(idx).y
+  IF enemy(idx).typ=etbomb THEN
+    DECR re.rleft,enemybombd
+    DECR re.rtop,enemybombd
+    re.rright = enemy(idx).x
+    re.rbottom = enemy(idx).y
   END IF
-  IF enemy(global_idx).typ=ettank THEN
-    global_right = global_left + 24
-    global_bottom = global_top + 7
+  IF enemy(idx).typ=ettank THEN
+    re.rright = re.rleft + 24
+    re.rbottom = re.rtop + 7
   END IF
-  IF enemy(global_idx).typ=etplane THEN
-    global_right = global_left + playerw
-    global_bottom = global_top + playerh
+  IF enemy(idx).typ=etplane THEN
+    re.rright = re.rleft + playerw
+    re.rbottom = re.rtop + playerh
   END IF
-RETURN
+END SUB
 
-CalcGlobalRectForFire:
-  global_left = fire(global_idx).x
-  global_top = fire(global_idx).y
-  IF fire(global_idx).typ=ftlaser THEN
-    global_right = global_left+laserw
-    global_bottom = global_top
+SUB CalcRectForFire(idx AS INTEGER, re AS Rect)
+  re.rleft = fire(idx).x
+  re.rtop = fire(idx).y
+  IF fire(idx).typ=ftlaser THEN
+    re.rright = re.rleft+laserw
+    re.rbottom = re.rtop
   END IF
-  IF fire(global_idx).typ=ftbomb THEN
-    DECR global_left,bombd
-    DECR global_top,bombd
-    global_right = global_left + bombd
-    global_bottom = global_top + bombd
+  IF fire(idx).typ=ftbomb THEN
+    DECR re.rleft,bombd
+    DECR re.rtop,bombd
+    re.rright = re.rleft + bombd
+    re.rbottom = re.rtop + bombd
   END IF
-  IF fire(global_idx).typ=ftsuper THEN
-    DECR global_left, superr
-    DECR global_top, superr
-    global_right = global_left + superd
-    global_bottom = global_top + superd
+  IF fire(idx).typ=ftsuper THEN
+    DECR re.rleft, superr
+    DECR re.rtop, superr
+    re.rright = re.rleft + superd
+    re.rbottom = re.rtop + superd
   END IF
-RETURN
+END SUB
 
-CalcGlobalRectForPlayer:
-  global_left = playerx
-  global_top = playery
-  global_right = global_left + playerw
-  global_bottom = global_top + playerh
-RETURN
+SUB CalcRectForPlayer(re AS Rect)
+  re.rleft = playerx
+  re.rtop = playery
+  re.rright = re.rleft + playerw
+  re.rbottom = re.rtop + playerh
+END SUB
 
-CalcIsGlobalRect1Rect2Intersect:
-  global_x =global_r1x1
-  global_y =global_r1y1
-  GOSUB CalcIsGlobalXYRect2Intersect:
-  IF global_result=1 THEN RETURN
+FUNCTION IsRectsIntersect(r1 AS Rect, r2 AS Rect) AS INTEGER
+  FUNCTION=0
 
-  global_x =global_r1x2
-  global_y =global_r1y1
-  GOSUB CalcIsGlobalXYRect2Intersect:
-  IF global_result=1 THEN RETURN
+  IF IsXYInRect(r1.rleft,r1.rtop,r2) THEN FUNCTION=1
+  IF IsXYInRect(r1.rleft,r1.rbottom,r2) THEN FUNCTION=1
+  IF IsXYInRect(r1.rright,r1.rtop,r2) THEN FUNCTION=1
+  IF IsXYInRect(r1.rright,r1.rbottom,r2) THEN FUNCTION=1
+  IF IsXYInRect(r2.rleft,r2.rtop,r1) THEN FUNCTION=1
+  IF IsXYInRect(r2.rleft,r2.rbottom,r1) THEN FUNCTION=1
+  IF IsXYInRect(r2.rright,r2.rtop,r1) THEN FUNCTION=1
+  IF IsXYInRect(r2.rright,r2.rbottom,r1) THEN FUNCTION=1
+END FUNCTION
 
-  global_x =global_r1x1
-  global_y =global_r1y2
-  GOSUB CalcIsGlobalXYRect2Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_x =global_r1x2
-  global_y =global_r1y2
-  GOSUB CalcIsGlobalXYRect2Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_x =global_r2x1
-  global_y =global_r2y1
-  GOSUB CalcIsGlobalXYRect1Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_x =global_r2x2
-  global_y =global_r2y1
-  GOSUB CalcIsGlobalXYRect1Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_x =global_r2x1
-  global_y =global_r2y2
-  GOSUB CalcIsGlobalXYRect1Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_x =global_r2x2
-  global_y =global_r2y2
-  GOSUB CalcIsGlobalXYRect1Intersect:
-  IF global_result=1 THEN RETURN
-
-  global_result=0
-RETURN
-
-CalcIsGlobalXYRect2Intersect:
-  global_result=0
-  IF (global_r2x1 <= global_x)AND(global_x <= global_r2x2) THEN
-    IF (global_r2y1 <= global_y)AND(global_y <= global_r2y2) THEN global_result=1
+FUNCTION IsXYInRect(x AS INTEGER, y AS INTEGER, re AS Rect) AS INTEGER
+  FUNCTION=0
+  IF (re.rleft <= x)AND(x <= re.rright) THEN
+    IF (re.rtop <= y)AND(y <= re.rbottom) THEN FUNCTION=1
   END IF
-RETURN
+END FUNCTION
 
-CalcIsGlobalXYRect1Intersect:
-  global_result=0
-  IF (global_r1x1 <= global_x)AND(global_x <= global_r1x2) THEN
-    IF (global_r1y1 <= global_y)AND(global_y <= global_r1y2) THEN global_result=1
-  END IF
-RETURN
+SUB DrawWhiteRect(re AS Rect)
+  LINE (re.rleft,re.rtop)-(re.rright,re.rtop),15
+  LINE (re.rright,re.rtop)-(re.rright,re.rbottom),15
+  LINE (re.rright,re.rbottom)-(re.rleft,re.rbottom),15
+  LINE (re.rleft,re.rbottom)-(re.rleft,re.rtop),15
+END SUB
+
+SUB SwitchPage()
+  STATIC pageindex
+  SCREEN ,,1-pageindex,pageindex
+  pageindex=1-pageindex
+END SUB
