@@ -12,3 +12,21 @@ shl ax,7
 mov cl,7
 shl ax,cl
 ```
+
+## Подключение OBJ от Digital Mars Compiler к QuickBasic
+
+Нужно обязательно создать файлы lib и qlb
+
+```
+link /q lib16bit.obj, lib16bit.qlb, NUL, bqlb45.lib
+del lib16bit.lib
+lib lib16bit.lib+lib16bit.obj,NUL
+```
+и запускать потом среду как `qb /l lib16bit.qlb`
+
+Также функции должны иметь явное указание типа через символ:
+
+```
+DECLARE FUNCTION getTimer% CDECL()
+```
+В остальном, всё как у PowerBasic
