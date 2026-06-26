@@ -30,3 +30,22 @@ lib lib16bit.lib+lib16bit.obj,NUL
 DECLARE FUNCTION getTimer% CDECL()
 ```
 В остальном, всё как у PowerBasic
+
+## Более аккуратная сборка библиотеки на OpenWatcom для подключения к QuickBasic
+
+Пример кода:
+```
+int funcAB(int a, int b) {
+  return a+b ;
+}
+```
+пример сборки (ключ ecc задает cdecl, mm - модель памяти medium, s - отключает проверку переполнения стека)
+```
+wcc -ecc -mm -s mylib.c
+del mylib.lib
+wlib mylib.lib mylib.obj
+```
+пример подключения
+```
+DECLARE FUNCTION funcAB% CDECL (BYVAL a AS INTEGER, BYVAL b AS INTEGER)
+```
